@@ -11,9 +11,8 @@ PBL_APP_INFO(MY_UUID,
 			 APP_INFO_WATCH_FACE);
 
 Window window;
-Layer hour_display_layer;
-Layer minute_display_layer;
-Layer second_display_layer;
+Layer hour_display_layer, minute_display_layer, second_display_layer;
+GPath hour_hand_path, minute_hand_path, second_hand_path;
 
 const GPathInfo HOUR_HAND_PATH_POINTS = {
 	4,
@@ -38,16 +37,20 @@ const GPathInfo MINUTE_HAND_PATH_POINTS = {
 const GPathInfo SECOND_HAND_PATH_POINTS = {
 	4,
 	(GPoint []) {
-		{-4, 4},
-		{4, 4},
-		{4, -120},
-		{-4,  -120},
+		{-2, 2},
+		{2, 2},
+		{2, -120},
+		{-2,  -120},
 	}
 };
 
-GPath hour_hand_path;
-GPath minute_hand_path;
-GPath second_hand_path;
+void initLayerPathAndCenter(Layer *layer, GPath *path, const GPathInfo *pathInfo, const void *updateProc) {
+	layer_init(layer, window.layer.frame);
+	layer->update_proc = updateProc;
+	layer_add_child(&window.layer, layer);
+	gpath_init(path, pathInfo);
+	gpath_move_to(path, grect_center_point(&layer->frame));
+}
 
 void hour_display_layer_update_callback(Layer *me, GContext* ctx) {
 	(void)me;
@@ -92,33 +95,14 @@ void handle_init(AppContextRef ctx) {
 	(void)ctx;
 
 	window_init(&window, "VeryPlain");
-	window_stack_push(&window, true /* Animated */);
+	window_stack_push(&window, true);
 	window_set_background_color(&window, GColorBlack);
 
 	resource_init_current_app(&APP_RESOURCES);
 
-	// hour layer
-	layer_init(&hour_display_layer, window.layer.frame);
-	hour_display_layer.update_proc = &hour_display_layer_update_callback;
-	layer_add_child(&window.layer, &hour_display_layer);
-	gpath_init(&hour_hand_path, &HOUR_HAND_PATH_POINTS);
-	gpath_move_to(&hour_hand_path, grect_center_point(&hour_display_layer.frame));
-
-	// minute layer
-	layer_init(&minute_display_layer, window.layer.frame);
-	minute_display_layer.update_proc = &minute_display_layer_update_callback;
-	layer_add_child(&window.layer, &minute_display_layer);
-	gpath_init(&minute_hand_path, &MINUTE_HAND_PATH_POINTS);
-	gpath_move_to(&minute_hand_path, grect_center_point(&minute_display_layer.frame));
-
-	// second layer
-	/*
-	layer_init(&second_display_layer, window.layer.frame);
-	second_display_layer.update_proc = &second_display_layer_update_callback;
-	layer_add_child(&window.layer, &second_display_layer);
-	gpath_init(&second_hand_path, &SECOND_HAND_PATH_POINTS);
-	gpath_move_to(&second_hand_path, grect_center_point(&second_display_layer.frame));
-	*/
+	initLayerPathAndCenter(&hour_display_layer, &hour_hand_path, &HOUR_HAND_PATH_POINTS, &hour_display_layer_update_callback);
+	initLayerPathAndCenter(&minute_display_layer, &minute_hand_path, &MINUTE_HAND_PATH_POINTS, &minute_display_layer_update_callback);
+	//initLayerPathAndCenter(&second_display_layer, &second_hand_path, &SECOND_HAND_PATH_POINTS, &second_display_layer_update_callback);
 }
 
 void handle_minute_tick(AppContextRef ctx, PebbleTickEvent *t){
@@ -136,7 +120,7 @@ void pbl_main(void *params) {
 		.init_handler = &handle_init,
 		.tick_info = {
 			.tick_handler = &handle_minute_tick,
-			.tick_units = MINUTE_UNIT // SECOND_UNIT
+			.tick_units = MINUTE_UNIT //SECOND_UNIT
 		}
 	};
 	app_event_loop(params, &handlers);
