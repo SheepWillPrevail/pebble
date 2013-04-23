@@ -1,0 +1,11 @@
+{
+	"friendlyVersion" : "dev_0.0",
+	"versionDefName" : "APP_RESOURCES",
+
+	"media" : [{
+			"type" : "png",
+			"defName" : "IMAGE_MENU_ICON",
+			"file" : "images/veryplain_logo.png"
+		}
+	]
+}
