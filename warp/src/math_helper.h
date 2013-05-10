@@ -1,3 +1,4 @@
+// https://github.com/exe44/pebble-fez/blob/0872cb0226524b438eefb841b5cdb1f7442f67fe/src/math_helper.h
 
 //==============================================================================
 // sqrt implement from Quake 3
