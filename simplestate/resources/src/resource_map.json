@@ -1,0 +1,77 @@
+{
+	"media" : [{
+			"defName" : "FONT_UBUNTU_BOLD_50",
+			"type" : "font",
+			"file" : "fonts/Ubuntu-Bold.ttf",
+			"characterRegex" : "[0-9:]"
+		}, {
+			"defName" : "FONT_UBUNTU_16",
+			"type" : "font",
+			"file" : "fonts/Ubuntu-Regular.ttf",
+			"characterRegex" : "[0-9\\-/]"
+		}, {
+			"defName" : "FONT_UBUNTU_10",
+			"type" : "font",
+			"file" : "fonts/Ubuntu-Regular.ttf"
+		}, {
+			"defName" : "PNG_BATTERY_0",
+			"type" : "png",
+			"file" : "images/battery_0.png"
+		}, {
+			"defName" : "PNG_BATTERY_20",
+			"type" : "png",
+			"file" : "images/battery_20.png"
+		}, {
+			"defName" : "PNG_BATTERY_40",
+			"type" : "png",
+			"file" : "images/battery_40.png"
+		}, {
+			"defName" : "PNG_BATTERY_60",
+			"type" : "png",
+			"file" : "images/battery_60.png"
+		}, {
+			"defName" : "PNG_BATTERY_80",
+			"type" : "png",
+			"file" : "images/battery_80.png"
+		}, {
+			"defName" : "PNG_BATTERY_100",
+			"type" : "png",
+			"file" : "images/battery_100.png"
+		}, {
+			"defName" : "PNG_SIGNAL_0",
+			"type" : "png",
+			"file" : "images/signal_0.png"
+		}, {
+			"defName" : "PNG_SIGNAL_20",
+			"type" : "png",
+			"file" : "images/signal_20.png"
+		}, {
+			"defName" : "PNG_SIGNAL_40",
+			"type" : "png",
+			"file" : "images/signal_40.png"
+		}, {
+			"defName" : "PNG_SIGNAL_60",
+			"type" : "png",
+			"file" : "images/signal_60.png"
+		}, {
+			"defName" : "PNG_SIGNAL_80",
+			"type" : "png",
+			"file" : "images/signal_80.png"
+		}, {
+			"defName" : "PNG_SIGNAL_100",
+			"type" : "png",
+			"file" : "images/signal_100.png"
+		}, {
+			"defName" : "PNG_CALL",
+			"type" : "png",
+			"file" : "images/icon_call.png"
+		}, {
+			"defName" : "PNG_MESSAGE",
+			"type" : "png",
+			"file" : "images/icon_message.png"
+		}
+
+	],
+	"friendlyVersion" : "VERSION",
+	"versionDefName" : "APP_RESOURCES"
+}

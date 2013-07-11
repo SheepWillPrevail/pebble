@@ -65,21 +65,11 @@ void update_star_layer(Layer *me, GContext *ctx) {
 	graphics_context_set_fill_color(ctx, GColorWhite);
 	for (i = 0; i < STAR_COUNT; i++) {
 		mat4_multiply_vec3(&screen_space, &vp, &stars[i].position);
-		radius = (screen_space.z / 100) * STAR_SIZE;
+		radius = (screen_space.z / EXTENT * 2) * STAR_SIZE;
 
 		if (screen_space.z > 0)
 			graphics_fill_circle(ctx, GPoint(72 + screen_space.x, 84 + screen_space.y), radius);
 	}
-}
-
-void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie) {
-	(void)ctx;
-	(void)handle;
-
-	update_stars();
-	layer_mark_dirty(&star_layer);
-
-	app_timer_send_event(ctx, DISPLAY_SLEEP, 0);
 }
 
 void handle_init(AppContextRef ctx) {
@@ -111,9 +101,14 @@ void handle_init(AppContextRef ctx) {
 	app_timer_send_event(ctx, DISPLAY_SLEEP, 0);
 }
 
-void handle_tick(AppContextRef ctx, PebbleTickEvent *t){
-	(void)t;
+void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie) {
 	(void)ctx;
+	(void)handle;
+
+	update_stars();
+	layer_mark_dirty(&star_layer);
+
+	app_timer_send_event(ctx, DISPLAY_SLEEP, 0);
 }
 
 void pbl_main(void *params) {
