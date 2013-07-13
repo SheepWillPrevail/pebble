@@ -13,27 +13,26 @@ PBL_APP_INFO(MY_UUID,
              APP_INFO_STANDARD_APP);
 
 Window window[3];
-MenuLayer menu_layer[3];
+MenuLayer menu_layer[2];
 ScrollLayer message_layer;
 TextLayer messagetext_layer;
 
-int currentLevel = 0;
-
-int feed_count = 0, feed_receive_idx = 0;
-char feed_names[16][101] = { "" };
-
-int item_count = 0, item_receive_idx = 0;
-char item_names[128][101] = { "" };
-
-char message[1024] = "";
+int currentLevel = 0, feed_count = 0, item_count = 0;
+int feed_receive_idx = 0;
+char feed_names[16][101];
+int item_receive_idx = 0;
+char item_names[128][101];
+int message_receive_idx = 0;
+char message[1001] = "";
 
 void request_command(int slot, int command) {
   DictionaryIterator *dict;
   app_message_out_get(&dict);
   dict_write_uint8(dict, slot, command);
-  dict_write_end(dict);
+  dict_write_end(dict); 
   app_message_out_send();
   app_message_out_release();
+  app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED); // go, go, go  
 }
 
 uint16_t menu_get_num_sections_callback(MenuLayer *me, void *data) {
@@ -57,12 +56,10 @@ void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t 
 
 void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
   int row = cell_index->row;
-  if (currentLevel == 0) { // feed
+  if (currentLevel == 0) // feed
     menu_cell_basic_draw(ctx, cell_layer, feed_names[row], NULL, NULL);
-  }
-  else if (currentLevel == 1) { // item
-    menu_cell_basic_draw(ctx, cell_layer, item_names[row], NULL, NULL);	  
-  }
+  else if (currentLevel == 1) // item
+    menu_cell_basic_draw(ctx, cell_layer, item_names[row], NULL, NULL);
 }
 
 void setup_window(Window *me); // ugh
@@ -70,14 +67,13 @@ void setup_window(Window *me); // ugh
 void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
   if (currentLevel == 0 && feed_count == 0) return;
   if (currentLevel == 1 && item_count == 0) return;
-  if (currentLevel == 2) return;
   
   setup_window(&window[++currentLevel]);
   
   if (currentLevel == 1)
-    request_command(1091, cell_index->row);
+    request_command(1091, cell_index->row); // get items
   if (currentLevel == 2)
-    request_command(1092, cell_index->row);
+    request_command(1092, cell_index->row); // get message
 }
 
 void window_load(Window *me) {
@@ -95,7 +91,7 @@ void window_load(Window *me) {
     layer_add_child(window_get_root_layer(me), menu_layer_get_layer(&menu_layer[currentLevel]));
   }
   else { // message
-    text_layer_init(&messagetext_layer, GRect(0, 0, 142, 2048));
+    text_layer_init(&messagetext_layer, GRect(0, 0, 144, 2048));
 	text_layer_set_font(&messagetext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
 	text_layer_set_text(&messagetext_layer, (const char*)&message);
 	
@@ -116,13 +112,13 @@ void setup_window(Window *me) {
     .load = window_load,
     .unload = window_unload,
   });
-  window_stack_push(me, true);  
+  window_stack_push(me, true);
 }
 
 void handle_init(AppContextRef ctx) { 
   resource_init_current_app(&APP_RESOURCES);
   setup_window(&window[0]);
-  request_command(1090, 0);
+  request_command(1090, 0); // hello
 }
 
 void handle_deinit(AppContextRef ctx) {
@@ -138,9 +134,10 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
     memcpy(&feed_names[offset->value->uint8], feed_tuple->value->cstring, feed_tuple->length);
 	
 	if (++feed_receive_idx == total->value->uint8) { // received all
+	  app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
 	  menu_layer_reload_data(&menu_layer[0]);
 	  layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));
-	  feed_receive_idx = 0;
+	  feed_receive_idx = 0;	  
 	}
   }
   
@@ -153,6 +150,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
     memcpy(&item_names[offset->value->uint8], item_tuple->value->cstring, item_tuple->length);
 
 	if (++item_receive_idx == total->value->uint8) { // received all
+	  app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
 	  menu_layer_reload_data(&menu_layer[1]);
 	  layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));
 	  item_receive_idx = 0;
@@ -161,9 +159,17 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
   
   Tuple *message_tuple = dict_find(received, 1003);
   if (message_tuple) {
-    memcpy(&message, message_tuple->value->cstring, message_tuple->length);
-	scroll_layer_set_content_size(&message_layer, text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer));
-	layer_mark_dirty(&message_layer.layer);
+	Tuple *total = dict_find(received, 1011);
+	Tuple *offset = dict_find(received, 1012);
+	
+    memcpy(&message[offset->value->uint16], message_tuple->value->cstring, message_tuple->length);
+	
+	if (++message_receive_idx == total->value->uint8) {	// received all
+	  app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
+	  scroll_layer_set_content_size(&message_layer, text_layer_get_max_used_size(    app_get_current_graphics_context(), &messagetext_layer));
+	  layer_mark_dirty(&message_layer.layer);
+	  message_receive_idx = 0;
+	}
   }
 }
 
