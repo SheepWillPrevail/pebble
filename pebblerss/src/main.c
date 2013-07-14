@@ -16,6 +16,7 @@ Window window[3];
 MenuLayer menu_layer[2];
 ScrollLayer message_layer;
 TextLayer messagetext_layer;
+GFont text_font;
 
 #define TITLE_SIZE 128
 
@@ -105,8 +106,9 @@ void window_load(Window *me) {
   }
   else { // message
 	message[0] = 0;
+	
     text_layer_init(&messagetext_layer, GRect(0, 0, 144, 2048));
-	text_layer_set_font(&messagetext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+	text_layer_set_font(&messagetext_layer, text_font);
 	text_layer_set_text(&messagetext_layer, (const char*)&message);
 	
 	scroll_layer_init(&message_layer, me->layer.bounds);
@@ -133,6 +135,7 @@ void setup_window(Window *me) {
 void handle_init(AppContextRef ctx) { 
   resource_init_current_app(&APP_RESOURCES);
   setup_window(&window[0]);
+  text_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   request_command(1090, 0, true); // hello
 }
 
@@ -152,14 +155,14 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	
     memcpy(&feed_names[offset->value->uint8], feed_tuple->value->cstring, feed_tuple->length);
 	
+	send_ack();
+	
 	if (++feed_receive_idx == total->value->uint8) { // received all
 	  throttle();
 	  menu_layer_reload_data(&menu_layer[0]);
 	  layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));
 	  feed_receive_idx = 0;	  
 	}
-	
-	send_ack();
   }
   
   Tuple *item_tuple = dict_find(received, 1002);
@@ -169,6 +172,8 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	item_count = total->value->uint8;
 	
     memcpy(&item_names[offset->value->uint8], item_tuple->value->cstring, item_tuple->length);
+	
+	send_ack();
 
 	if (++item_receive_idx == total->value->uint8) { // received all
 	  throttle();
@@ -176,8 +181,6 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	  layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));
 	  item_receive_idx = 0;
 	}
-	
-	send_ack();
   }  
   
   Tuple *message_tuple = dict_find(received, 1003);
@@ -187,14 +190,14 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	
     memcpy(&message[offset->value->uint16], message_tuple->value->cstring, message_tuple->length);
 	
+	send_ack();
+	
 	if (++message_receive_idx == total->value->uint8) {	// received all
 	  throttle();
 	  scroll_layer_set_content_size(&message_layer, text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer));
-	  layer_mark_dirty(&message_layer.layer);
+	  layer_mark_dirty(&messagetext_layer.layer); // do NOT invalidate the scroll layer here.
 	  message_receive_idx = 0;
 	}
-
-	send_ack();
   }
 }
 
