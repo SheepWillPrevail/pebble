@@ -17,22 +17,35 @@ MenuLayer menu_layer[2];
 ScrollLayer message_layer;
 TextLayer messagetext_layer;
 
-int currentLevel = 0, feed_count = 0, item_count = 0;
-int feed_receive_idx = 0;
-char feed_names[16][101];
-int item_receive_idx = 0;
-char item_names[128][101];
-int message_receive_idx = 0;
-char message[1001] = "";
+#define TITLE_SIZE 128
 
-void request_command(int slot, int command) {
+int currentLevel = 0, feed_count = 0, item_count = 0;
+int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
+char feed_names[16][TITLE_SIZE], item_names[128][TITLE_SIZE];
+char message[1001];
+
+int in_boost = 0;
+void boost() {
+  if (!in_boost) {
+    app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED); // go, go, go  
+	in_boost = 1;
+  }
+}
+void throttle() {
+  if (in_boost) {
+    app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
+	in_boost = 0;
+  }
+}
+
+void request_command(int slot, int command, bool do_boost) {
   DictionaryIterator *dict;
   app_message_out_get(&dict);
   dict_write_uint8(dict, slot, command);
   dict_write_end(dict); 
   app_message_out_send();
   app_message_out_release();
-  app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED); // go, go, go  
+  if (do_boost) boost();
 }
 
 uint16_t menu_get_num_sections_callback(MenuLayer *me, void *data) {
@@ -71,9 +84,9 @@ void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
   setup_window(&window[++currentLevel]);
   
   if (currentLevel == 1)
-    request_command(1091, cell_index->row); // get items
+    request_command(1091, cell_index->row, true); // get items
   if (currentLevel == 2)
-    request_command(1092, cell_index->row); // get message
+    request_command(1092, cell_index->row, true); // get message
 }
 
 void window_load(Window *me) {
@@ -91,6 +104,7 @@ void window_load(Window *me) {
     layer_add_child(window_get_root_layer(me), menu_layer_get_layer(&menu_layer[currentLevel]));
   }
   else { // message
+	message[0] = 0;
     text_layer_init(&messagetext_layer, GRect(0, 0, 144, 2048));
 	text_layer_set_font(&messagetext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
 	text_layer_set_text(&messagetext_layer, (const char*)&message);
@@ -103,6 +117,7 @@ void window_load(Window *me) {
 }
 
 void window_unload(Window *me) {
+  if (currentLevel == 1) item_count = 0; //  force reload
   currentLevel--;
 }
 
@@ -118,10 +133,14 @@ void setup_window(Window *me) {
 void handle_init(AppContextRef ctx) { 
   resource_init_current_app(&APP_RESOURCES);
   setup_window(&window[0]);
-  request_command(1090, 0); // hello
+  request_command(1090, 0, true); // hello
 }
 
 void handle_deinit(AppContextRef ctx) {
+}
+
+void send_ack() {
+  request_command(1090, 1, false);
 }
 
 void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
@@ -134,11 +153,13 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
     memcpy(&feed_names[offset->value->uint8], feed_tuple->value->cstring, feed_tuple->length);
 	
 	if (++feed_receive_idx == total->value->uint8) { // received all
-	  app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
+	  throttle();
 	  menu_layer_reload_data(&menu_layer[0]);
 	  layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));
 	  feed_receive_idx = 0;	  
 	}
+	
+	send_ack();
   }
   
   Tuple *item_tuple = dict_find(received, 1002);
@@ -150,11 +171,13 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
     memcpy(&item_names[offset->value->uint8], item_tuple->value->cstring, item_tuple->length);
 
 	if (++item_receive_idx == total->value->uint8) { // received all
-	  app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
+	  throttle();
 	  menu_layer_reload_data(&menu_layer[1]);
 	  layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));
 	  item_receive_idx = 0;
 	}
+	
+	send_ack();
   }  
   
   Tuple *message_tuple = dict_find(received, 1003);
@@ -165,11 +188,13 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
     memcpy(&message[offset->value->uint16], message_tuple->value->cstring, message_tuple->length);
 	
 	if (++message_receive_idx == total->value->uint8) {	// received all
-	  app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
-	  scroll_layer_set_content_size(&message_layer, text_layer_get_max_used_size(    app_get_current_graphics_context(), &messagetext_layer));
+	  throttle();
+	  scroll_layer_set_content_size(&message_layer, text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer));
 	  layer_mark_dirty(&message_layer.layer);
 	  message_receive_idx = 0;
 	}
+
+	send_ack();
   }
 }
 
