@@ -16,11 +16,10 @@ Window window[3];
 MenuLayer menu_layer[2];
 ScrollLayer message_layer;
 TextLayer messagetext_layer;
-GFont text_font;
 
 #define TITLE_SIZE 128
 
-int currentLevel = 0, feed_count = 0, item_count = 0;
+int currentLevel = 0, selected_item_id = 0, feed_count = 0, item_count = 0;
 int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
 char feed_names[16][TITLE_SIZE], item_names[128][TITLE_SIZE];
 char message[1001];
@@ -69,11 +68,10 @@ void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t 
 }
 
 void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
-  int row = cell_index->row;
   if (currentLevel == 0) // feed
-    menu_cell_basic_draw(ctx, cell_layer, feed_names[row], NULL, NULL);
+    menu_cell_basic_draw(ctx, cell_layer, feed_names[cell_index->row], NULL, NULL);
   else if (currentLevel == 1) // item
-    menu_cell_basic_draw(ctx, cell_layer, item_names[row], NULL, NULL);
+    menu_cell_basic_draw(ctx, cell_layer, item_names[cell_index->row], NULL, NULL);
 }
 
 void setup_window(Window *me); // ugh
@@ -86,8 +84,19 @@ void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
   
   if (currentLevel == 1)
     request_command(1091, cell_index->row, true); // get items
-  if (currentLevel == 2)
+
+  if (currentLevel == 2) {
+    selected_item_id = cell_index->row;
     request_command(1092, cell_index->row, true); // get message
+  }
+}
+
+void message_click(ClickRecognizerRef recognizer, void *context) {
+  request_command(1093, selected_item_id, false);
+}
+
+void message_click_config_provider(ClickConfig **config, void* context) {
+  config[BUTTON_ID_SELECT]->click.handler = message_click;
 }
 
 void window_load(Window *me) {
@@ -108,13 +117,15 @@ void window_load(Window *me) {
 	message[0] = 0;
 	
     text_layer_init(&messagetext_layer, GRect(0, 0, 144, 2048));
-	text_layer_set_font(&messagetext_layer, text_font);
+	text_layer_set_font(&messagetext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
 	text_layer_set_text(&messagetext_layer, (const char*)&message);
 	
 	scroll_layer_init(&message_layer, me->layer.bounds);
     scroll_layer_add_child(&message_layer, &messagetext_layer.layer);
 	scroll_layer_set_click_config_onto_window(&message_layer, me);	
 	layer_add_child(window_get_root_layer(me), &messagetext_layer.layer);
+	
+	window_set_click_config_provider(me, message_click_config_provider);
   }
 }
 
@@ -135,7 +146,6 @@ void setup_window(Window *me) {
 void handle_init(AppContextRef ctx) { 
   resource_init_current_app(&APP_RESOURCES);
   setup_window(&window[0]);
-  text_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   request_command(1090, 0, true); // hello
 }
 
