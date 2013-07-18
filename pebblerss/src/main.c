@@ -4,7 +4,7 @@
 
 #include "resource_ids.auto.h"
 
-#define MY_NAME "PebbleRSS"
+#define MY_NAME "Pebble RSS"
 #define MY_UUID { 0x19, 0x41, 0xE6, 0x14, 0x91, 0x63, 0x49, 0xBD, 0xBA, 0x01, 0x6D, 0x7F, 0xA7, 0x1E, 0xED, 0xAC }
 PBL_APP_INFO(MY_UUID,
              MY_NAME, "sWp",
@@ -122,10 +122,11 @@ void window_load(Window *me) {
 	
 	scroll_layer_init(&message_layer, me->layer.bounds);
     scroll_layer_add_child(&message_layer, &messagetext_layer.layer);
-	scroll_layer_set_click_config_onto_window(&message_layer, me);	
-	layer_add_child(window_get_root_layer(me), &messagetext_layer.layer);
-	
-	window_set_click_config_provider(me, message_click_config_provider);
+	scroll_layer_set_callbacks(&message_layer, (ScrollLayerCallbacks){
+	  .click_config_provider = message_click_config_provider
+	});
+	scroll_layer_set_click_config_onto_window(&message_layer, me);
+	layer_add_child(window_get_root_layer(me), &message_layer.layer);	
   }
 }
 
@@ -205,7 +206,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	if (++message_receive_idx == total->value->uint8) {	// received all
 	  throttle();
 	  scroll_layer_set_content_size(&message_layer, text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer));
-	  layer_mark_dirty(&messagetext_layer.layer); // do NOT invalidate the scroll layer here.
+	  layer_mark_dirty(&message_layer.layer);
 	  message_receive_idx = 0;
 	}
   }
