@@ -229,6 +229,7 @@ void handle_timer(AppContextRef app_ctx, AppTimerHandle handle, uint32_t cookie)
   DictionaryIterator *dict;
   result = app_message_out_get(&dict);
   if (result != APP_MSG_OK) {
+    app_message_out_release();
     app_timer_send_event(app_ctx, 25, cookie);
     return;
   }
@@ -236,7 +237,7 @@ void handle_timer(AppContextRef app_ctx, AppTimerHandle handle, uint32_t cookie)
   dict_write_end(dict);
   app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED);  
   result = app_message_out_send();
-  app_message_out_release();  
+  app_message_out_release();
   if (result != APP_MSG_OK) {
     app_timer_send_event(app_ctx, 25, cookie);
     return;
