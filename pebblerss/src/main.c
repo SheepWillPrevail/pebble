@@ -65,16 +65,14 @@ void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *c
     menu_cell_basic_draw(ctx, cell_layer, feed_names[cell_index->row], NULL, NULL);
 	break;
   case 1:
-    menu_cell_basic_draw(ctx, cell_layer, item_names[cell_index->row], NULL, NULL);
+	graphics_context_set_text_color(ctx, GColorBlack);
+	GRect bounds = cell_layer->bounds;
+	graphics_text_draw(ctx, item_names[cell_index->row], fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
     break;	
   }
 }
 
 void setup_window(Window *me); // ugh
-
-void request_item() {
-  request_command(1092, selected_item_id);
-}
 
 void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
   if (currentLevel == 0 && feed_count == 0) return;
@@ -92,7 +90,7 @@ void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
   case 2:
     message_receive_idx = 0;
     selected_item_id = cell_index->row;
-	request_item();
+    request_command(1092, selected_item_id);
     break;      
   }
 }
@@ -136,12 +134,13 @@ void window_load(Window *me) {
 void window_unload(Window *me) {
   switch (currentLevel) {
   case 1: // back to feed list
+	if (feed_receive_idx != feed_count) request_command(1090, 2); // continue loading
 	for (int i = 0; i < 128; i++)
 	  item_names[i][0] = 0;
     break;
   case 2: // back to item list
-    message[0] = 0;
-	if (item_receive_idx != item_count) request_command(1090, 2); // continue loading
+	if (item_receive_idx != item_count) request_command(1090, 3); // continue loading
+	message[0] = 0;
     break;      
   }
   currentLevel--;
@@ -157,8 +156,9 @@ void setup_window(Window *me) {
 }
 
 void handle_init(AppContextRef ctx) {
-  app = ctx;
   resource_init_current_app(&APP_RESOURCES);
+  app = ctx;
+  feed_receive_idx = 0;
   setup_window(&window[0]);
   request_command(1090, 0); // hello
 }
@@ -179,12 +179,16 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	
     memcpy(&feed_names[offset->value->uint8], feed_tuple->value->cstring, feed_tuple->length);
 	
-	if (++feed_receive_idx == total->value->uint8) { // received all
-	  if (currentLevel == 0) throttle();
-	  feed_receive_idx = 0;
+	if (feed_receive_idx == 0) {
+	  feed_count = total->value->uint8;
 	  menu_layer_reload_data(&menu_layer[0]);
-	  layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));	  
-	} else send_ack();
+	}
+	
+	layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));	
+	
+	if (++feed_receive_idx == total->value->uint8 && currentLevel == 0) // received all
+	  throttle();
+	else if (currentLevel == 0) request_command(1090, 2);
   }  
   
   Tuple *item_tuple = dict_find(received, 1002);
@@ -196,15 +200,14 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	
 	if (item_receive_idx == 0) {
       item_count = total->value->uint8;
-	  menu_layer_reload_data(&menu_layer[1]);	  	  
+	  menu_layer_reload_data(&menu_layer[1]);
 	}
 	
 	layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));	
 	
-	if (++item_receive_idx == total->value->uint8 && currentLevel == 1) { // received all
+	if (++item_receive_idx == total->value->uint8 && currentLevel == 1) // received all
 	  throttle();
-    }
-	else if (currentLevel == 1) request_command(1090, 2); // continue
+	else if (currentLevel == 1) request_command(1090, 3);
   }
   
   Tuple *message_tuple = dict_find(received, 1003);
