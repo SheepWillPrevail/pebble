@@ -21,7 +21,7 @@ TextLayer messagetext_layer;
 
 int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0;
 int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
-char feed_names[32][TITLE_SIZE], item_names[128][TITLE_SIZE];
+char feed_names[64][TITLE_SIZE], item_names[128][TITLE_SIZE];
 char message[1001];
 
 AppContextRef app;
@@ -158,7 +158,6 @@ void setup_window(Window *me) {
 void handle_init(AppContextRef ctx) {
   resource_init_current_app(&APP_RESOURCES);
   app = ctx;
-  feed_receive_idx = 0;
   setup_window(&window[0]);
   request_command(1090, 0); // hello
 }
@@ -219,7 +218,9 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	
 	if (++message_receive_idx == total->value->uint8) {	// received all
       if (currentLevel == 2) throttle();
- 	  scroll_layer_set_content_size(&message_layer, text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer));
+	  GSize size = text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer);
+	  size.h += 4;
+ 	  scroll_layer_set_content_size(&message_layer, size);
 	  layer_mark_dirty(&messagetext_layer.layer);
 	  layer_mark_dirty(&message_layer.layer);
 	}
