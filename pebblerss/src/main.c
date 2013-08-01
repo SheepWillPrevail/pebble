@@ -22,7 +22,7 @@ TextLayer messagetext_layer;
 int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0;
 int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
 char feed_names[64][TITLE_SIZE], item_names[128][TITLE_SIZE];
-char message[1001];
+char message[2001];
 
 AppContextRef app;
 int pslot, pcommand;
