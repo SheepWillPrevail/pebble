@@ -21,8 +21,9 @@ TextLayer messagetext_layer;
 
 int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0;
 int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
-char feed_names[64][TITLE_SIZE], item_names[128][TITLE_SIZE];
+char feed_names[48][TITLE_SIZE], item_names[128][TITLE_SIZE];
 char message[2001];
+int fontfeed = 0, fontitem = 0, fontmessage = 0;
 
 AppContextRef app;
 int pslot, pcommand;
@@ -31,6 +32,38 @@ void request_command(int slot, int command) {
   pslot = slot;
   pcommand = command;
   app_timer_send_event(app, 25, 0);
+}
+
+char* fontid2resource(int id) {
+switch (id) {
+  case 0:
+    return FONT_KEY_GOTHIC_14;
+  case 1:
+    return FONT_KEY_GOTHIC_14_BOLD;
+  case 2:
+    return FONT_KEY_GOTHIC_18;
+  case 3:
+    return FONT_KEY_GOTHIC_18_BOLD;
+  case 4:
+    return FONT_KEY_GOTHIC_24;
+  case 5:
+    return FONT_KEY_GOTHIC_24_BOLD;
+  case 6:
+    return FONT_KEY_GOTHIC_28;
+  case 7:
+    return FONT_KEY_GOTHIC_28_BOLD;
+  case 8:
+    return FONT_KEY_BITHAM_30_BLACK;
+  case 9:
+    return FONT_KEY_BITHAM_42_BOLD;
+  case 10:
+    return FONT_KEY_BITHAM_42_LIGHT;
+  case 11:
+    return FONT_KEY_ROBOTO_CONDENSED_21;
+  case 12:
+    return FONT_KEY_DROID_SERIF_28_BOLD;
+}
+  return 0;
 }
 
 void throttle() {
@@ -60,14 +93,14 @@ void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t 
 }
 
 void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
+  graphics_context_set_text_color(ctx, GColorBlack);
+  GRect bounds = cell_layer->bounds;
   switch (currentLevel) {
   case 0:
-    menu_cell_basic_draw(ctx, cell_layer, feed_names[cell_index->row], NULL, NULL);
+	graphics_text_draw(ctx, feed_names[cell_index->row], fonts_get_system_font(fontid2resource(fontfeed)), bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 	break;
   case 1:
-	graphics_context_set_text_color(ctx, GColorBlack);
-	GRect bounds = cell_layer->bounds;
-	graphics_text_draw(ctx, item_names[cell_index->row], fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+	graphics_text_draw(ctx, item_names[cell_index->row], fonts_get_system_font(fontid2resource(fontitem)), bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
     break;	
   }
 }
@@ -119,7 +152,7 @@ void window_load(Window *me) {
   }
   else { // message
     text_layer_init(&messagetext_layer, GRect(0, 0, 144, 2048));
-	text_layer_set_font(&messagetext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+	text_layer_set_font(&messagetext_layer, fonts_get_system_font(fontid2resource(fontmessage)));
 	text_layer_set_text(&messagetext_layer, (const char*)&message);	
 	scroll_layer_init(&message_layer, me->layer.bounds);
     scroll_layer_add_child(&message_layer, &messagetext_layer.layer);
@@ -225,6 +258,34 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	  layer_mark_dirty(&message_layer.layer);
 	}
 	else send_ack();	
+  }
+  
+  Tuple *font_feed = dict_find(received, 1013);
+  if (font_feed) {
+    Tuple *font_item = dict_find(received, 1014);
+	Tuple *font_message = dict_find(received, 1015);
+	fontfeed = font_feed->value->uint8;
+	fontitem = font_item->value->uint8;
+	fontmessage = font_message->value->uint8;
+	switch (currentLevel) {
+	  case 0:
+   	    layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));
+		menu_layer_reload_data(&menu_layer[0]);
+		break;
+	  case 1:
+	    layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));
+		menu_layer_reload_data(&menu_layer[1]);
+		break;
+	  case 2:
+	    text_layer_set_font(&messagetext_layer, fonts_get_system_font(fontid2resource(fontmessage)));
+		GSize size = text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer);
+	    size.h += 4;
+ 	    scroll_layer_set_content_size(&message_layer, size);
+		scroll_layer_set_content_offset(&message_layer, GPoint(0, 0), true);
+	    layer_mark_dirty(&messagetext_layer.layer);
+	    layer_mark_dirty(&message_layer.layer);
+		break;
+	}
   }
 }
 
