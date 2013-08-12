@@ -23,7 +23,7 @@ int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0;
 int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
 char feed_names[48][TITLE_SIZE], item_names[128][TITLE_SIZE];
 char message[2001];
-int fontfeed = 0, fontitem = 0, fontmessage = 0;
+int fontfeed = 0, fontitem = 0, fontmessage = 0, cellheight = 0;
 
 AppContextRef app;
 int pslot, pcommand;
@@ -70,10 +70,6 @@ void throttle() {
   app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
 }
 
-uint16_t menu_get_num_sections_callback(MenuLayer *me, void *data) {
-  return 0;
-}
-
 uint16_t menu_get_num_rows_callback(MenuLayer *me, uint16_t section_index, void *data) {
   switch (currentLevel) {
   case 0:
@@ -85,11 +81,8 @@ uint16_t menu_get_num_rows_callback(MenuLayer *me, uint16_t section_index, void 
   }
 }
 
-int16_t menu_get_header_height_callback(MenuLayer *me, uint16_t section_index, void *data) {
-  return 0;
-}
-
-void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t section_index, void *data) {
+int16_t menu_get_cell_height_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
+  return cellheight;
 }
 
 void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
@@ -140,10 +133,8 @@ void window_load(Window *me) {
   if (currentLevel < 2) { // feed or item
 	menu_layer_init(&menu_layer[currentLevel], me->layer.bounds);		
     menu_layer_set_callbacks(&menu_layer[currentLevel], NULL, (MenuLayerCallbacks){
-      .get_num_sections = menu_get_num_sections_callback,
+	  .get_cell_height = menu_get_cell_height_callback,
       .get_num_rows = menu_get_num_rows_callback,
-      .get_header_height = menu_get_header_height_callback,
-      .draw_header = menu_draw_header_callback,
       .draw_row = menu_draw_row_callback,
       .select_click = menu_select_callback,
     }); 
@@ -264,27 +255,25 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
   if (font_feed) {
     Tuple *font_item = dict_find(received, 1014);
 	Tuple *font_message = dict_find(received, 1015);
+	Tuple *cell_height = dict_find(received, 1016);
 	fontfeed = font_feed->value->uint8;
 	fontitem = font_item->value->uint8;
 	fontmessage = font_message->value->uint8;
-	switch (currentLevel) {
-	  case 0:
-   	    layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));
-		menu_layer_reload_data(&menu_layer[0]);
-		break;
-	  case 1:
-	    layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));
-		menu_layer_reload_data(&menu_layer[1]);
-		break;
-	  case 2:
+	cellheight = cell_height->value->uint8;	
+	menu_layer_reload_data(&menu_layer[0]);
+	layer_mark_dirty(menu_layer_get_layer(&menu_layer[0]));	
+	if (currentLevel > 0) {
+		menu_layer_reload_data(&menu_layer[1]);	
+	    layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));		
+	}
+	if (currentLevel > 1) {
 	    text_layer_set_font(&messagetext_layer, fonts_get_system_font(fontid2resource(fontmessage)));
 		GSize size = text_layer_get_max_used_size(app_get_current_graphics_context(), &messagetext_layer);
 	    size.h += 4;
  	    scroll_layer_set_content_size(&message_layer, size);
 		scroll_layer_set_content_offset(&message_layer, GPoint(0, 0), true);
 	    layer_mark_dirty(&messagetext_layer.layer);
-	    layer_mark_dirty(&message_layer.layer);
-		break;
+	    layer_mark_dirty(&message_layer.layer);	
 	}
   }
 }
