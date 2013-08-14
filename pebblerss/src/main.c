@@ -16,6 +16,7 @@ Window window[3];
 MenuLayer menu_layer[2];
 ScrollLayer message_layer;
 TextLayer messagetext_layer;
+BmpContainer refresh_image;
 
 #define TITLE_SIZE 96 + 1
 
@@ -182,11 +183,17 @@ void setup_window(Window *me) {
 void handle_init(AppContextRef ctx) {
   resource_init_current_app(&APP_RESOURCES);
   app = ctx;
+  bmp_init_container(RESOURCE_ID_IMAGE_REFRESH, &refresh_image);
+  refresh_image.layer.layer.frame.origin.x = 55;
+  refresh_image.layer.layer.frame.origin.y = 58;
   setup_window(&window[0]);
+  layer_add_child(window_get_root_layer(&window[0]), &refresh_image.layer.layer);
+  layer_set_hidden(&refresh_image.layer.layer, true);
   request_command(1090, 0); // hello
 }
 
 void handle_deinit(AppContextRef ctx) {
+  bmp_deinit_container(&refresh_image);
 }
 
 void send_ack() {
@@ -203,6 +210,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
     memcpy(&feed_names[offset->value->uint8], feed_tuple->value->cstring, feed_tuple->length);
 	
 	if (feed_receive_idx == 0) {
+	  layer_set_hidden(&refresh_image.layer.layer, true);
 	  feed_count = total->value->uint8;
 	  menu_layer_reload_data(&menu_layer[0]);
 	}
@@ -275,6 +283,11 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	    layer_mark_dirty(&messagetext_layer.layer);
 	    layer_mark_dirty(&message_layer.layer);	
 	}
+  }
+  
+  Tuple *refresh_packet = dict_find(received, 1017);
+  if (refresh_packet && currentLevel == 0 && (feed_receive_idx == 0)) {
+     layer_set_hidden(&refresh_image.layer.layer, false);
   }
 }
 

@@ -4,6 +4,11 @@
 			"defName" : "IMAGE_MENU_ICON",
 			"file" : "images/icon.png"
 		}
+		,{
+			"type" : "png",
+			"defName" : "IMAGE_REFRESH",
+			"file" : "images/refresh.png"
+		}
 	],
 	"friendlyVersion" : "VERSION",
 	"versionDefName" : "APP_RESOURCES"
