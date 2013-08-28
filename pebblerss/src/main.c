@@ -8,21 +8,25 @@
 #define MY_UUID { 0x19, 0x41, 0xE6, 0x14, 0x91, 0x63, 0x49, 0xBD, 0xBA, 0x01, 0x6D, 0x7F, 0xA7, 0x1E, 0xED, 0xAC }
 PBL_APP_INFO(MY_UUID, MY_NAME, "sWp", 1, 0, DEFAULT_MENU_ICON, APP_INFO_STANDARD_APP);
 
-Window window[3];
+Window window[4];
 MenuLayer menu_layer[2];
 ScrollLayer message_layer;
 TextLayer messagetext_layer;
 BmpContainer refresh_image;
+BitmapLayer image_layer;
+GBitmap image;
 
 #define TITLE_SIZE 96 + 1
-#define MESSAGE_SIZE 2048 + 1
 #define RETRY_TIMEOUT 50
+#define CHUNK_BUFFER_SIZE 3024
 
 int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0;
 int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
 int fontfeed = 0, fontitem = 0, fontmessage = 0, cellheight = 0;
-char feed_names[48][TITLE_SIZE], item_names[128][TITLE_SIZE];
-char message[MESSAGE_SIZE];
+char feed_names[32][TITLE_SIZE], item_names[128][TITLE_SIZE];
+int chunk_receive_idx = 0;
+char chunkbuffer[CHUNK_BUFFER_SIZE];
+int imagew, imageh, imageb;
 
 AppContextRef app;
 int pslot, pcommand;
@@ -95,14 +99,17 @@ void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *c
 
 void setup_window(Window *me);
 
+void push_new_level() {
+	currentLevel++;
+	setup_window(&window[currentLevel]);
+}
+
 void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
 	if (currentLevel == 0 && feed_count == 0) return;
 	if (currentLevel == 1 && item_count == 0) return;
 
-	currentLevel++;
-
-	setup_window(&window[currentLevel]);
-
+	push_new_level();
+	
 	switch (currentLevel) {
 	case 1:
 		item_receive_idx = 0; item_count = 0;
@@ -117,11 +124,17 @@ void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
 }
 
 void message_click(ClickRecognizerRef recognizer, void *context) {
+	push_new_level();
+	request_command(1094, selected_item_id);
+}
+
+void message_long_click(ClickRecognizerRef recognizer, void *context) {
 	request_command(1093, selected_item_id);
 }
 
 void message_click_config_provider(ClickConfig **config, void* context) {
 	config[BUTTON_ID_SELECT]->click.handler = message_click;
+	config[BUTTON_ID_SELECT]->long_click.handler = message_long_click;
 }
 
 void window_load(Window *me) {
@@ -139,10 +152,9 @@ void window_load(Window *me) {
 		menu_layer_set_click_config_onto_window(&menu_layer[currentLevel], me);
 		layer_add_child(window_get_root_layer(me), menu_layer_get_layer(&menu_layer[currentLevel]));
 	}
-	else { // message
-		memset(message, 0, MESSAGE_SIZE);
+	else if (currentLevel == 2) { // message
 		text_layer_init(&messagetext_layer, GRect(0, 0, 144, 8192));
-		text_layer_set_text(&messagetext_layer, message);
+		text_layer_set_text(&messagetext_layer, chunkbuffer);
 		scroll_layer_init(&message_layer, me->layer.bounds);
 		scroll_layer_add_child(&message_layer, &messagetext_layer.layer);
 		scroll_layer_set_callbacks(&message_layer, (ScrollLayerCallbacks){
@@ -162,6 +174,9 @@ void window_unload(Window *me) {
 	case 2: // back to item list
 		if (item_receive_idx != item_count) request_command(1090, 3); // continue loading
 		break;
+	case 3: // back to message
+		layer_set_hidden(&message_layer.layer, true);
+		request_command(1092, selected_item_id);
 	}
 	currentLevel--;
 }
@@ -253,22 +268,6 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		}
 	}
 
-	Tuple *message_tuple = dict_find(received, 1003);
-	if (message_tuple) {
-		Tuple *total = dict_find(received, 1031);
-		Tuple *offset = dict_find(received, 1032);
-
-		memcpy(&message[offset->value->uint16], message_tuple->value->data, message_tuple->length);
-
-		if (currentLevel == 2) {
-			if (++message_receive_idx == total->value->uint8) { // received all
-				throttle();
-				setMessageLayerAttributes();
-			}
-			else send_ack();
-		}
-	}
-
 	Tuple *font_feed = dict_find(received, 1013);
 	if (font_feed) {
 		Tuple *font_item = dict_find(received, 1014);
@@ -284,14 +283,56 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 			menu_layer_reload_data(&menu_layer[1]);	
 			layer_mark_dirty(menu_layer_get_layer(&menu_layer[1]));
 		}
-		if (currentLevel > 1) {
+		if (currentLevel > 1)
 			setMessageLayerAttributes();
-		}
 	}
 
 	Tuple *refresh_packet = dict_find(received, 1017);
-	if (refresh_packet && currentLevel == 0 && (feed_receive_idx == 0)) {
+	if (refresh_packet && currentLevel == 0 && (feed_receive_idx == 0))
 		layer_set_hidden(&refresh_image.layer.layer, false);
+	
+	Tuple *image_w_packet = dict_find(received, 1018);
+	if (image_w_packet) {
+		Tuple *image_h_packet = dict_find(received, 1019);
+		Tuple *image_b_packet = dict_find(received, 1020);		
+		imagew = image_w_packet->value->uint16;
+		imageh = image_h_packet->value->uint16;
+		imageb = image_b_packet->value->uint8;
+		image = (GBitmap) {
+		  .addr = &chunkbuffer,
+		  .bounds = GRect(0, 0, imagew, imageh),
+		  .info_flags = 1,
+		  .row_size_bytes = imageb		
+		};
+		bitmap_layer_init(&image_layer, GRect((144 - imagew) / 2, (152 - imageh) / 2, imagew, imageh));
+		bitmap_layer_set_bitmap(&image_layer, &image);
+		request_command(1090, 1);
+	}
+	
+	Tuple *chunk_d_packet = dict_find(received, 9999);
+	if (chunk_d_packet) {
+		Tuple *chunk_o_packet = dict_find(received, 9998);
+		Tuple *chunk_l_packet = dict_find(received, 9997);
+		Tuple *chunk_t_packet = dict_find(received, 9996);
+
+		if (chunk_receive_idx == 0) {
+			memset(chunkbuffer, 0, CHUNK_BUFFER_SIZE);
+			if (currentLevel == 3)
+				layer_add_child(window_get_root_layer(&window[3]), &image_layer.layer);
+		}
+
+		memcpy(&chunkbuffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
+
+		if (++chunk_receive_idx == chunk_t_packet->value->uint8) {
+			chunk_receive_idx = 0;
+			throttle();
+			if (currentLevel == 2)
+				setMessageLayerAttributes();
+		}
+		else request_command(1090, 1);
+		
+		if (currentLevel == 3)
+			layer_mark_dirty(&image_layer.layer);
 	}
 }
 
