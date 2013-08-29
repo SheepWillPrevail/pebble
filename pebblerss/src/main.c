@@ -20,7 +20,7 @@ GBitmap image;
 #define RETRY_TIMEOUT 50
 #define CHUNK_BUFFER_SIZE 3024
 
-int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0;
+int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0, has_thumbnail = 0;
 int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
 int fontfeed = 0, fontitem = 0, fontmessage = 0, cellheight = 0;
 char feed_names[32][TITLE_SIZE], item_names[128][TITLE_SIZE];
@@ -123,13 +123,21 @@ void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
 	}
 }
 
-void message_click(ClickRecognizerRef recognizer, void *context) {
-	push_new_level();
-	request_command(1094, selected_item_id);
+void message_long_click(ClickRecognizerRef recognizer, void *context) {
+	if (chunk_receive_idx == 0)
+		request_command(1093, selected_item_id);
 }
 
-void message_long_click(ClickRecognizerRef recognizer, void *context) {
-	request_command(1093, selected_item_id);
+void image_click_config_provider(ClickConfig **config, void* context) {
+	config[BUTTON_ID_SELECT]->long_click.handler = message_long_click;
+}
+
+void message_click(ClickRecognizerRef recognizer, void *context) {
+	if (has_thumbnail && chunk_receive_idx == 0) {
+		push_new_level();
+		window_set_click_config_provider(&window[currentLevel], image_click_config_provider);
+		request_command(1094, selected_item_id);
+	}
 }
 
 void message_click_config_provider(ClickConfig **config, void* context) {
@@ -152,7 +160,7 @@ void window_load(Window *me) {
 		menu_layer_set_click_config_onto_window(&menu_layer[currentLevel], me);
 		layer_add_child(window_get_root_layer(me), menu_layer_get_layer(&menu_layer[currentLevel]));
 	}
-	else if (currentLevel == 2) { // message
+	else if (currentLevel == 2) { // message		
 		text_layer_init(&messagetext_layer, GRect(0, 0, 144, 8192));
 		text_layer_set_text(&messagetext_layer, chunkbuffer);
 		scroll_layer_init(&message_layer, me->layer.bounds);
@@ -324,15 +332,21 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		memcpy(&chunkbuffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
 
 		if (++chunk_receive_idx == chunk_t_packet->value->uint8) {
-			chunk_receive_idx = 0;
 			throttle();
+			chunk_receive_idx = 0;
 			if (currentLevel == 2)
 				setMessageLayerAttributes();
 		}
-		else request_command(1090, 1);
+		else request_command(1090, 1);		
 		
 		if (currentLevel == 3)
 			layer_mark_dirty(&image_layer.layer);
+	}
+	
+	Tuple *item_status = dict_find(received, 1023);
+	if (item_status) {
+	  has_thumbnail = item_status->value->uint8;
+	  request_command(1090, 1);
 	}
 }
 
