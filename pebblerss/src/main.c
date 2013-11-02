@@ -6,7 +6,7 @@
 
 #define MY_NAME "Pebble RSS"
 #define MY_UUID { 0x19, 0x41, 0xE6, 0x14, 0x91, 0x63, 0x49, 0xBD, 0xBA, 0x01, 0x6D, 0x7F, 0xA7, 0x1E, 0xED, 0xAC }
-PBL_APP_INFO(MY_UUID, MY_NAME, "sWp", 1, 0, DEFAULT_MENU_ICON, APP_INFO_STANDARD_APP);
+PBL_APP_INFO(MY_UUID, MY_NAME, "sWp", 1, 0, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
 
 Window window[4];
 MenuLayer menu_layer[2];
