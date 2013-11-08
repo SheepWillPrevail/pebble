@@ -1,0 +1,25 @@
+{
+  "uuid": "1941e614-9163-49bd-ba01-6d7fa71eedac",
+  "shortName": "Pebble RSS",
+  "longName": "Pebble RSS",
+  "companyName": "SheepWillPrevail",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": false
+  },
+  "resources": {
+    "media": [{
+			"type" : "png",
+			"name" : "IMAGE_MENU_ICON",
+			"file" : "icon.png",
+			"menuIcon" : true
+		}
+		,{
+			"type" : "png",
+			"name" : "IMAGE_REFRESH",
+			"file" : "refresh.png"
+		}
+	]
+  }
+}
