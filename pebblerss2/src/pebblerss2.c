@@ -21,6 +21,11 @@ int chunk_receive_idx = 0;
 char chunkbuffer[CHUNK_BUFFER_SIZE];
 int imagew, imageh, imageb;
 
+int current_slot = 0, current_command = 0;
+AppTimer *command_timer = NULL;
+
+void handle_resend(void* data);
+
 void request_command(int slot, int command) {
 	AppMessageResult result;
 	DictionaryIterator *dict;
@@ -28,9 +33,22 @@ void request_command(int slot, int command) {
 	if (result == APP_MSG_OK) {
 		dict_write_uint8(dict, slot, command);
 		dict_write_end(dict);
-		app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED);
 		app_message_outbox_send();
+		app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED);
+		if (command_timer != NULL) {
+			app_timer_cancel(command_timer);
+			command_timer = NULL;
+		}			
 	}
+	else {
+		current_slot = slot;
+		current_command = command;
+		command_timer = app_timer_register(250, handle_resend, NULL);
+	}
+}
+
+void handle_resend(void* data) {
+	request_command(current_slot, current_command);
 }
 
 char* fontid2resource(int id) {
@@ -183,8 +201,7 @@ void window_unload(Window *me) {
 		break;
 	case 3: // back to message		
 		request_command(1092, selected_item_id);
-	}
-	window_destroy(window[currentLevel]);
+	}	
 	currentLevel--;
 }
 
@@ -197,10 +214,6 @@ Window* setup_window() {
 	});
 	window_stack_push(me, true);
 	return me;
-}
-
-void send_ack() {
-	request_command(1090, 1);
 }
 
 void throttle() {
@@ -343,7 +356,8 @@ void handle_init() {
 
 void handle_deinit() {
 	menu_layer_destroy(menu_layer[0]);
-	window_destroy(window[0]);
+	for (int i = 0; i < 4; i++)
+		if (window[i]) window_destroy(window[i]);
 }
 
 int main() {
