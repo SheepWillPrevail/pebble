@@ -22,7 +22,10 @@ char chunkbuffer[CHUNK_BUFFER_SIZE];
 int imagew, imageh, imageb;
 
 int current_slot = 0, current_command = 0;
-AppTimer *command_timer = NULL;
+AppTimer *command_timer = 0;
+
+BitmapLayer *loading_indicator = NULL;
+GBitmap *loading_bitmap = NULL;
 
 void handle_resend(void* data);
 
@@ -241,6 +244,8 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		if (feed_receive_idx == 0) {
 			feed_count = total->value->uint8;
 			menu_layer_reload_data(menu_layer[0]);
+			if (loading_indicator != NULL)
+				layer_set_hidden(bitmap_layer_get_layer(loading_indicator), true);
 		}
 
 		layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));	
@@ -292,9 +297,20 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 			setMessageLayerAttributes();
 	}
 
-	//Tuple *refresh_packet = dict_find(received, 1017);
-	//if (refresh_packet && currentLevel == 0 && (feed_receive_idx == 0))
-		//layer_set_hidden(&refresh_image.layer.layer, false);
+	Tuple *refresh_packet = dict_find(received, 1017);
+	if (refresh_packet && currentLevel == 0 && (feed_receive_idx == 0)) {		
+		if (loading_indicator == NULL) {
+			Layer *window0 = window_get_root_layer(window[0]);
+			loading_indicator = bitmap_layer_create(layer_get_frame(window0));
+			loading_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_REFRESH);			
+			bitmap_layer_set_bitmap(loading_indicator, loading_bitmap);
+			Layer *loading_layer = bitmap_layer_get_layer(loading_indicator);
+			layer_set_bounds(loading_layer, GRect(0, 0, 32, 32));
+			layer_set_frame(loading_layer, GRect(55, 58, 32, 32));
+			layer_add_child(window0, loading_layer);
+		}
+		layer_set_hidden(bitmap_layer_get_layer(loading_indicator), false);
+	}
 	
 	Tuple *image_w_packet = dict_find(received, 1018);
 	if (image_w_packet) {
@@ -358,6 +374,10 @@ void handle_deinit() {
 	menu_layer_destroy(menu_layer[0]);
 	for (int i = 0; i < 4; i++)
 		if (window[i]) window_destroy(window[i]);
+	if (loading_indicator != NULL) {
+		 bitmap_layer_destroy(loading_indicator);
+		 gbitmap_destroy(loading_bitmap);
+	}
 }
 
 int main() {
