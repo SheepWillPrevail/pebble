@@ -5,14 +5,14 @@
 #define TITLE_SIZE 96 + 1
 #define CHUNK_BUFFER_SIZE 3024
 
-AppTimer *command_timer = 0;
+AppTimer *command_timer = NULL;
+BitmapLayer *refresh_layer = NULL;
 Window *window[4];
 MenuLayer *menu_layer[2];
 TextLayer *messagetext_layer;
 ScrollLayer *message_layer;
-BitmapLayer *refresh_layer = NULL;
-BitmapLayer *image_layer = NULL;
-GBitmap *refresh_bitmap = NULL;
+BitmapLayer *image_layer;
+GBitmap *refresh_bitmap;
 GBitmap image;
 
 char feed_names[16][TITLE_SIZE], item_names[128][TITLE_SIZE];
@@ -37,14 +37,17 @@ void request_command(int slot, int command) {
 		result = app_message_outbox_send();
 		if (result == APP_MSG_OK) {
 			app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED);
-			app_timer_cancel(command_timer);
-			command_timer = NULL;
+			if (command_timer != NULL) {
+				app_timer_cancel(command_timer);
+				command_timer = NULL;
+			}
 		}
 	}
 	else {
 		current_slot = slot;
 		current_command = command;
-		command_timer = app_timer_register(250, handle_resend, NULL);
+		if (command_timer == NULL)
+			command_timer = app_timer_register(250, handle_resend, NULL);
 	}
 }
 
@@ -175,7 +178,7 @@ void window_load(Window *me) {
 		menu_layer_set_click_config_onto_window(menu_layer[current_level], me);
 		layer_add_child(window_get_root_layer(me), menu_layer_get_layer(menu_layer[current_level]));
 	}
-	else if (current_level == 2) { // message		
+	else if (current_level == 2) { // message
 		messagetext_layer = text_layer_create(GRect(0, 0, 144, 1024));
 		text_layer_set_text(messagetext_layer, chunk_buffer);
 		message_layer = scroll_layer_create(layer_get_bounds(window_get_root_layer(me)));
@@ -200,7 +203,8 @@ void window_unload(Window *me) {
 		scroll_layer_destroy(message_layer);
 		text_layer_destroy(messagetext_layer);
 		break;
-	case 3: // back to message		
+	case 3: // back to message
+		bitmap_layer_destroy(image_layer);
 		request_command(1092, selected_item_id);
 	}	
 	current_level--;
@@ -326,8 +330,6 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		  .info_flags = 1,
 		  .row_size_bytes = imageb		
 		};
-		if (image_layer != NULL)
-			bitmap_layer_destroy(image_layer);
 		Layer *window3 = window_get_root_layer(window[3]);
 		image_layer = bitmap_layer_create(layer_get_bounds(window3));
 		bitmap_layer_set_alignment(image_layer, GAlignCenter);
