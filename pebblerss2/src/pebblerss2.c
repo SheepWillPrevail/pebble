@@ -1,31 +1,29 @@
 #include "pebble.h"
 #include "pebble_fonts.h"
-
 #include "resource_ids.auto.h"
-
-Window *window[4];
-MenuLayer *menu_layer[2];
-ScrollLayer *message_layer;
-TextLayer *messagetext_layer;
-BitmapLayer *image_layer;
-GBitmap image;
 
 #define TITLE_SIZE 96 + 1
 #define CHUNK_BUFFER_SIZE 3024
 
-int currentLevel = 0, feed_count = 0, item_count = 0, selected_item_id = 0, has_thumbnail = 0;
-int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0;
-int fontfeed = 0, fontitem = 0, fontmessage = 0, cellheight = 0;
-char feed_names[16][TITLE_SIZE], item_names[128][TITLE_SIZE];
-int chunk_receive_idx = 0;
-char chunkbuffer[CHUNK_BUFFER_SIZE];
-int imagew, imageh, imageb;
-
-int current_slot = 0, current_command = 0;
 AppTimer *command_timer = 0;
+Window *window[4];
+MenuLayer *menu_layer[2];
+TextLayer *messagetext_layer;
+ScrollLayer *message_layer;
+BitmapLayer *refresh_layer = NULL;
+BitmapLayer *image_layer = NULL;
+GBitmap *refresh_bitmap = NULL;
+GBitmap image;
 
-BitmapLayer *loading_indicator = NULL;
-GBitmap *loading_bitmap = NULL;
+char feed_names[16][TITLE_SIZE], item_names[128][TITLE_SIZE];
+char chunk_buffer[CHUNK_BUFFER_SIZE];
+
+int current_level = 0, current_slot = 0, current_command = 0;
+int feed_receive_idx = 0, item_receive_idx = 0, message_receive_idx = 0, chunk_receive_idx = 0;
+int feed_count = 0, item_count = 0;
+int selected_item_id = 0, has_thumbnail = 0; 
+int fontfeed = 0, fontitem = 0, fontmessage = 0, cellheight = 0;
+int imagew, imageh, imageb;
 
 void handle_resend(void* data);
 
@@ -36,12 +34,12 @@ void request_command(int slot, int command) {
 	if (result == APP_MSG_OK) {
 		dict_write_uint8(dict, slot, command);
 		dict_write_end(dict);
-		app_message_outbox_send();
-		app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED);
-		if (command_timer != NULL) {
+		result = app_message_outbox_send();
+		if (result == APP_MSG_OK) {
+			app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED);
 			app_timer_cancel(command_timer);
 			command_timer = NULL;
-		}			
+		}
 	}
 	else {
 		current_slot = slot;
@@ -87,7 +85,7 @@ char* fontid2resource(int id) {
 }
 
 uint16_t menu_get_num_rows_callback(MenuLayer *me, uint16_t section_index, void *data) {
-	switch (currentLevel) {
+	switch (current_level) {
 	case 0:
 		return feed_count;
 	case 1:
@@ -104,7 +102,7 @@ int16_t menu_get_cell_height_callback(MenuLayer *me, MenuIndex *cell_index, void
 void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
 	graphics_context_set_text_color(ctx, GColorBlack);
 	GRect bounds = layer_get_bounds(cell_layer);
-	switch (currentLevel) {
+	switch (current_level) {
 	case 0:
 		graphics_draw_text(ctx, feed_names[cell_index->row], fonts_get_system_font(fontid2resource(fontfeed)), bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 		break;
@@ -114,20 +112,20 @@ void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *c
 	}
 }
 
-Window* setup_window();
+Window* get_window();
 
 void push_new_level() {
-	currentLevel++;
-	window[currentLevel] = setup_window();
+	current_level++;
+	window[current_level] = get_window();
 }
 
 void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
-	if (currentLevel == 0 && feed_count == 0) return;
-	if (currentLevel == 1 && item_count == 0) return;
+	if (current_level == 0 && feed_count == 0) return;
+	if (current_level == 1 && item_count == 0) return;
 
 	push_new_level();
 	
-	switch (currentLevel) {
+	switch (current_level) {
 	case 1:
 		item_receive_idx = 0; item_count = 0;
 		request_command(1091, cell_index->row);
@@ -152,7 +150,7 @@ void image_click_config_provider(void* context) {
 void message_click(ClickRecognizerRef recognizer, void *context) {
 	if (has_thumbnail && chunk_receive_idx == 0) {
 		push_new_level();
-		window_set_click_config_provider(window[currentLevel], image_click_config_provider);
+		window_set_click_config_provider(window[current_level], image_click_config_provider);
 		request_command(1094, selected_item_id);
 	}
 }
@@ -163,23 +161,23 @@ void message_click_config_provider(void* context) {
 }
 
 void window_load(Window *me) {
-	if (currentLevel < 2) { // feed or item
-		if (currentLevel == 1)
+	if (current_level < 2) { // feed or item
+		if (current_level == 1)
 			for (int i = 0; i < 128; i++)
 				memset(item_names[i], 0, TITLE_SIZE);
-		menu_layer[currentLevel] = menu_layer_create(layer_get_bounds(window_get_root_layer(me)));
-		menu_layer_set_callbacks(menu_layer[currentLevel], NULL, (MenuLayerCallbacks){
+		menu_layer[current_level] = menu_layer_create(layer_get_bounds(window_get_root_layer(me)));
+		menu_layer_set_callbacks(menu_layer[current_level], NULL, (MenuLayerCallbacks){
 			.get_cell_height = menu_get_cell_height_callback,
 			.get_num_rows = menu_get_num_rows_callback,
 			.draw_row = menu_draw_row_callback,
 			.select_click = menu_select_callback,
 		});
-		menu_layer_set_click_config_onto_window(menu_layer[currentLevel], me);
-		layer_add_child(window_get_root_layer(me), menu_layer_get_layer(menu_layer[currentLevel]));
+		menu_layer_set_click_config_onto_window(menu_layer[current_level], me);
+		layer_add_child(window_get_root_layer(me), menu_layer_get_layer(menu_layer[current_level]));
 	}
-	else if (currentLevel == 2) { // message		
+	else if (current_level == 2) { // message		
 		messagetext_layer = text_layer_create(GRect(0, 0, 144, 1024));
-		text_layer_set_text(messagetext_layer, chunkbuffer);
+		text_layer_set_text(messagetext_layer, chunk_buffer);
 		message_layer = scroll_layer_create(layer_get_bounds(window_get_root_layer(me)));
 		scroll_layer_add_child(message_layer, text_layer_get_layer(messagetext_layer));
 		scroll_layer_set_callbacks(message_layer, (ScrollLayerCallbacks){
@@ -192,7 +190,7 @@ void window_load(Window *me) {
 }
 
 void window_unload(Window *me) {
-	switch (currentLevel) {
+	switch (current_level) {
 	case 1: // back to feed list
 		if (feed_receive_idx != feed_count) request_command(1090, 2); // continue loading
 		menu_layer_destroy(menu_layer[1]);
@@ -205,11 +203,11 @@ void window_unload(Window *me) {
 	case 3: // back to message		
 		request_command(1092, selected_item_id);
 	}	
-	currentLevel--;
+	current_level--;
 }
 
-Window* setup_window() {
-	Window* me = window[currentLevel];
+Window* get_window() {
+	Window* me = window[current_level];
 	if (!me) me = window_create();
 	window_set_window_handlers(me, (WindowHandlers){
 		.load = window_load,
@@ -223,7 +221,11 @@ void throttle() {
 	app_comm_set_sniff_interval(SNIFF_INTERVAL_NORMAL);
 }
 
-void setMessageLayerAttributes() {
+void ack() {
+	request_command(1090, 1);
+}
+
+void set_messagetext_layer() {
 	text_layer_set_font(messagetext_layer, fonts_get_system_font(fontid2resource(fontmessage)));
 	GSize size = text_layer_get_content_size(messagetext_layer);
 	size.h += 4;
@@ -244,13 +246,13 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		if (feed_receive_idx == 0) {
 			feed_count = total->value->uint8;
 			menu_layer_reload_data(menu_layer[0]);
-			if (loading_indicator != NULL)
-				layer_set_hidden(bitmap_layer_get_layer(loading_indicator), true);
+			if (refresh_layer != NULL)
+				layer_set_hidden(bitmap_layer_get_layer(refresh_layer), true);
 		}
 
 		layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));	
 
-		if (currentLevel == 0) {
+		if (current_level == 0) {
 			if (++feed_receive_idx == feed_count) // received all
 				throttle();
 			else request_command(1090, 2);
@@ -271,7 +273,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 
 		layer_mark_dirty(menu_layer_get_layer(menu_layer[1]));
 
-		if (currentLevel == 1) {
+		if (current_level == 1) {
 			if (++item_receive_idx == item_count) // received all
 				throttle();
 			else request_command(1090, 3);
@@ -289,27 +291,26 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		cellheight = cell_height->value->uint8;	
 		menu_layer_reload_data(menu_layer[0]);
 		layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));	
-		if (currentLevel > 0) {
+		if (current_level > 0) {
 			menu_layer_reload_data(menu_layer[1]);	
 			layer_mark_dirty(menu_layer_get_layer(menu_layer[1]));
 		}
-		if (currentLevel > 1)
-			setMessageLayerAttributes();
+		if (current_level > 1)
+			set_messagetext_layer();
 	}
 
 	Tuple *refresh_packet = dict_find(received, 1017);
-	if (refresh_packet && currentLevel == 0 && (feed_receive_idx == 0)) {		
-		if (loading_indicator == NULL) {
+	if (refresh_packet && current_level == 0 && feed_receive_idx == 0) {
+		if (refresh_layer == NULL) {
 			Layer *window0 = window_get_root_layer(window[0]);
-			loading_indicator = bitmap_layer_create(layer_get_frame(window0));
-			loading_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_REFRESH);			
-			bitmap_layer_set_bitmap(loading_indicator, loading_bitmap);
-			Layer *loading_layer = bitmap_layer_get_layer(loading_indicator);
-			layer_set_bounds(loading_layer, GRect(0, 0, 32, 32));
-			layer_set_frame(loading_layer, GRect(55, 58, 32, 32));
-			layer_add_child(window0, loading_layer);
+			refresh_layer = bitmap_layer_create(layer_get_bounds(window0));
+			refresh_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_REFRESH);
+			bitmap_layer_set_alignment(refresh_layer, GAlignCenter);
+			bitmap_layer_set_background_color(refresh_layer, GColorClear);
+			bitmap_layer_set_bitmap(refresh_layer, refresh_bitmap);
+			layer_add_child(window0, bitmap_layer_get_layer(refresh_layer));
 		}
-		layer_set_hidden(bitmap_layer_get_layer(loading_indicator), false);
+		layer_set_hidden(bitmap_layer_get_layer(refresh_layer), false);
 	}
 	
 	Tuple *image_w_packet = dict_find(received, 1018);
@@ -320,14 +321,20 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		imageh = image_h_packet->value->uint16;
 		imageb = image_b_packet->value->uint8;
 		image = (GBitmap) {
-		  .addr = &chunkbuffer,
+		  .addr = &chunk_buffer,
 		  .bounds = GRect(0, 0, imagew, imageh),
 		  .info_flags = 1,
 		  .row_size_bytes = imageb		
 		};
-		image_layer = bitmap_layer_create(GRect((144 - imagew) / 2, (152 - imageh) / 2, imagew, imageh));
+		if (image_layer != NULL)
+			bitmap_layer_destroy(image_layer);
+		Layer *window3 = window_get_root_layer(window[3]);
+		image_layer = bitmap_layer_create(layer_get_bounds(window3));
+		bitmap_layer_set_alignment(image_layer, GAlignCenter);
+		bitmap_layer_set_background_color(image_layer, GColorClear);
 		bitmap_layer_set_bitmap(image_layer, &image);
-		request_command(1090, 1);
+		layer_add_child(window3, bitmap_layer_get_layer(image_layer));
+		ack();
 	}
 	
 	Tuple *chunk_d_packet = dict_find(received, 9999);
@@ -336,48 +343,45 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		Tuple *chunk_l_packet = dict_find(received, 9997);
 		Tuple *chunk_t_packet = dict_find(received, 9996);
 
-		if (chunk_receive_idx == 0) {
-			memset(chunkbuffer, 0, CHUNK_BUFFER_SIZE);
-			if (currentLevel == 3)
-				layer_add_child(window_get_root_layer(window[3]), bitmap_layer_get_layer(image_layer));
-		}
+		if (chunk_receive_idx == 0)
+			memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);
 
-		memcpy(&chunkbuffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
+		memcpy(&chunk_buffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
 
 		if (++chunk_receive_idx == chunk_t_packet->value->uint8) {
 			throttle();
 			chunk_receive_idx = 0;
-			if (currentLevel == 2)
-				setMessageLayerAttributes();
+			if (current_level == 2)
+				set_messagetext_layer();
 		}
-		else request_command(1090, 1);		
+		else ack();		
 		
-		if (currentLevel == 3)
+		if (current_level == 3)
 			layer_mark_dirty(bitmap_layer_get_layer(image_layer));
 	}
 	
 	Tuple *item_status = dict_find(received, 1023);
 	if (item_status) {
 	  has_thumbnail = item_status->value->uint8;
-	  request_command(1090, 1);
+	  ack();
 	}
 }
 
 void handle_init() {
 	app_message_register_inbox_received(msg_in_rcv_handler);
 	app_message_open(124, 32);
-	window[0] = setup_window();
+	window[0] = get_window();
 	request_command(1090, 0); // hello
 }
 
 void handle_deinit() {
+	if (refresh_layer != NULL) {
+		 bitmap_layer_destroy(refresh_layer);
+		 gbitmap_destroy(refresh_bitmap);
+	}
 	menu_layer_destroy(menu_layer[0]);
 	for (int i = 0; i < 4; i++)
 		if (window[i]) window_destroy(window[i]);
-	if (loading_indicator != NULL) {
-		 bitmap_layer_destroy(loading_indicator);
-		 gbitmap_destroy(loading_bitmap);
-	}
 }
 
 int main() {
