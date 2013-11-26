@@ -153,7 +153,6 @@ void image_click_config_provider(void* context) {
 void message_click(ClickRecognizerRef recognizer, void *context) {
 	if (has_thumbnail && chunk_receive_idx == 0) {
 		push_new_level();
-		window_set_click_config_provider(window[current_level], image_click_config_provider);
 		request_command(1094, selected_item_id);
 	}
 }
@@ -164,11 +163,14 @@ void message_click_config_provider(void* context) {
 }
 
 void window_load(Window *me) {
-	if (current_level < 2) { // feed or item
+	Layer *window_layer = window_get_root_layer(me);
+	switch (current_level) {
+	case 0:
+	case 1:
 		if (current_level == 1)
-			for (int i = 0; i < 128; i++)
+			for (int i = 0; i < item_count; i++)
 				memset(item_names[i], 0, TITLE_SIZE);
-		menu_layer[current_level] = menu_layer_create(layer_get_bounds(window_get_root_layer(me)));
+		menu_layer[current_level] = menu_layer_create(layer_get_bounds(window_layer));
 		menu_layer_set_callbacks(menu_layer[current_level], NULL, (MenuLayerCallbacks){
 			.get_cell_height = menu_get_cell_height_callback,
 			.get_num_rows = menu_get_num_rows_callback,
@@ -176,19 +178,30 @@ void window_load(Window *me) {
 			.select_click = menu_select_callback,
 		});
 		menu_layer_set_click_config_onto_window(menu_layer[current_level], me);
-		layer_add_child(window_get_root_layer(me), menu_layer_get_layer(menu_layer[current_level]));
-	}
-	else if (current_level == 2) { // message
+		layer_add_child(window_layer, menu_layer_get_layer(menu_layer[current_level]));
+		break;
+	case 2:
 		messagetext_layer = text_layer_create(GRect(0, 0, 144, 1024));
 		text_layer_set_text(messagetext_layer, chunk_buffer);
-		message_layer = scroll_layer_create(layer_get_bounds(window_get_root_layer(me)));
+		message_layer = scroll_layer_create(layer_get_bounds(window_layer));
 		scroll_layer_add_child(message_layer, text_layer_get_layer(messagetext_layer));
 		scroll_layer_set_callbacks(message_layer, (ScrollLayerCallbacks){
 			.click_config_provider = message_click_config_provider
 		});
 		scroll_layer_set_click_config_onto_window(message_layer, me);
 		layer_set_hidden(scroll_layer_get_layer(message_layer), true);
-		layer_add_child(window_get_root_layer(me), scroll_layer_get_layer(message_layer));
+		layer_add_child(window_layer, scroll_layer_get_layer(message_layer));
+		break;
+	case 3:
+		memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);
+		image_layer = bitmap_layer_create(layer_get_bounds(window_layer));
+		bitmap_layer_set_alignment(image_layer, GAlignCenter);
+		bitmap_layer_set_background_color(image_layer, GColorClear);
+		bitmap_layer_set_bitmap(image_layer, &image);
+		layer_set_hidden(bitmap_layer_get_layer(image_layer), true);
+		layer_add_child(window_layer, bitmap_layer_get_layer(image_layer));
+		window_set_click_config_provider(me, image_click_config_provider);		
+		break;
 	}
 }
 
@@ -204,8 +217,8 @@ void window_unload(Window *me) {
 		text_layer_destroy(messagetext_layer);
 		break;
 	case 3: // back to message
-		bitmap_layer_destroy(image_layer);
 		request_command(1092, selected_item_id);
+		bitmap_layer_destroy(image_layer);
 	}	
 	current_level--;
 }
@@ -243,7 +256,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	Tuple *feed_tuple = dict_find(received, 1001);
 	if (feed_tuple) {
 		Tuple *total = dict_find(received, 1011);
-		Tuple *offset = dict_find(received, 1012);
+		Tuple *offset = dict_find(received, 1012);		
 
 		memcpy(&feed_names[offset->value->uint8], feed_tuple->value->cstring, feed_tuple->length);
 
@@ -330,12 +343,6 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		  .info_flags = 1,
 		  .row_size_bytes = imageb		
 		};
-		Layer *window3 = window_get_root_layer(window[3]);
-		image_layer = bitmap_layer_create(layer_get_bounds(window3));
-		bitmap_layer_set_alignment(image_layer, GAlignCenter);
-		bitmap_layer_set_background_color(image_layer, GColorClear);
-		bitmap_layer_set_bitmap(image_layer, &image);
-		layer_add_child(window3, bitmap_layer_get_layer(image_layer));
 		ack();
 	}
 	
@@ -344,9 +351,12 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		Tuple *chunk_o_packet = dict_find(received, 9998);
 		Tuple *chunk_l_packet = dict_find(received, 9997);
 		Tuple *chunk_t_packet = dict_find(received, 9996);
-
-		if (chunk_receive_idx == 0)
+		
+		if (chunk_receive_idx == 0) {
 			memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);
+			if (current_level == 3)
+				layer_set_hidden(bitmap_layer_get_layer(image_layer), false);
+		}
 
 		memcpy(&chunk_buffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
 
