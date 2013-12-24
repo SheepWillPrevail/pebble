@@ -146,7 +146,13 @@ void message_long_click(ClickRecognizerRef recognizer, void *context) {
 		request_command(1093, selected_item_id);
 }
 
+void image_click(ClickRecognizerRef recognizer, void *context) {
+	if (chunk_receive_idx == 0)
+		window_stack_pop(true);
+}
+
 void image_click_config_provider(void* context) {
+	window_single_click_subscribe(BUTTON_ID_BACK, image_click);
 	window_long_click_subscribe(BUTTON_ID_SELECT, 500, message_long_click, NULL);
 }
 
