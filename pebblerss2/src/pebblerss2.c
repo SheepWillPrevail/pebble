@@ -187,6 +187,7 @@ void window_load(Window *me) {
 		layer_add_child(window_layer, menu_layer_get_layer(menu_layer[current_level]));
 		break;
 	case 2:
+		memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);
 		messagetext_layer = text_layer_create(GRect(0, 0, 144, 1024));
 		text_layer_set_text(messagetext_layer, chunk_buffer);
 		message_layer = scroll_layer_create(layer_get_bounds(window_layer));
@@ -262,7 +263,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 	Tuple *feed_tuple = dict_find(received, 1001);
 	if (feed_tuple) {
 		Tuple *total = dict_find(received, 1011);
-		Tuple *offset = dict_find(received, 1012);		
+		Tuple *offset = dict_find(received, 1012);
 
 		memcpy(&feed_names[offset->value->uint8], feed_tuple->value->cstring, feed_tuple->length);
 
