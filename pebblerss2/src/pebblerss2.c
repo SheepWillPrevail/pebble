@@ -187,7 +187,6 @@ void window_load(Window *me) {
 		layer_add_child(window_layer, menu_layer_get_layer(menu_layer[current_level]));
 		break;
 	case 2:
-		memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);
 		messagetext_layer = text_layer_create(GRect(0, 0, 144, 1024));
 		text_layer_set_text(messagetext_layer, chunk_buffer);
 		message_layer = scroll_layer_create(layer_get_bounds(window_layer));
@@ -226,6 +225,7 @@ void window_unload(Window *me) {
 	case 3: // back to message
 		request_command(1092, selected_item_id);
 		bitmap_layer_destroy(image_layer);
+		scroll_layer_set_content_size(message_layer, GSize(0, 0));
 	}	
 	current_level--;
 }
