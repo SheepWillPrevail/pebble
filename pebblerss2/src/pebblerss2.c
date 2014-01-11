@@ -122,6 +122,24 @@ void push_new_level() {
 	window[current_level] = get_window();
 }
 
+void show_loading() {
+	Layer *window_layer = window_get_root_layer(window[current_level]);
+	if (refresh_layer == NULL) {
+		refresh_layer = bitmap_layer_create(layer_get_bounds(window_layer));
+		refresh_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_REFRESH);
+		bitmap_layer_set_alignment(refresh_layer, GAlignCenter);
+		bitmap_layer_set_background_color(refresh_layer, GColorClear);
+		bitmap_layer_set_bitmap(refresh_layer, refresh_bitmap);
+		layer_add_child(window_layer, bitmap_layer_get_layer(refresh_layer));
+	}
+	layer_set_hidden(bitmap_layer_get_layer(refresh_layer), false);
+}
+
+void hide_loading() {
+	if (refresh_layer != NULL)
+		layer_set_hidden(bitmap_layer_get_layer(refresh_layer), true);
+}
+
 void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
 	if (current_level == 0 && feed_count == 0) return;
 	if (current_level == 1 && item_count == 0) return;
@@ -141,19 +159,19 @@ void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
 	}
 }
 
-void message_long_click(ClickRecognizerRef recognizer, void *context) {
+void item_long_click(ClickRecognizerRef recognizer, void *context) {
 	if (chunk_receive_idx == 0)
 		request_command(1093, selected_item_id);
 }
 
-void image_click(ClickRecognizerRef recognizer, void *context) {
+void image_back_click(ClickRecognizerRef recognizer, void *context) {
 	if (chunk_receive_idx == 0)
 		window_stack_pop(true);
 }
 
 void image_click_config_provider(void* context) {
-	window_single_click_subscribe(BUTTON_ID_BACK, image_click);
-	window_long_click_subscribe(BUTTON_ID_SELECT, 500, message_long_click, NULL);
+	window_single_click_subscribe(BUTTON_ID_BACK, image_back_click);
+	window_long_click_subscribe(BUTTON_ID_SELECT, 500, item_long_click, NULL);
 }
 
 void message_click(ClickRecognizerRef recognizer, void *context) {
@@ -165,7 +183,7 @@ void message_click(ClickRecognizerRef recognizer, void *context) {
 
 void message_click_config_provider(void* context) {
 	window_single_click_subscribe(BUTTON_ID_SELECT, message_click);
-	window_long_click_subscribe(BUTTON_ID_SELECT, 500, message_long_click, NULL);
+	window_long_click_subscribe(BUTTON_ID_SELECT, 500, item_long_click, NULL);
 }
 
 void window_load(Window *me) {
@@ -206,7 +224,7 @@ void window_load(Window *me) {
 		bitmap_layer_set_bitmap(image_layer, &image);
 		layer_set_hidden(bitmap_layer_get_layer(image_layer), true);
 		layer_add_child(window_layer, bitmap_layer_get_layer(image_layer));
-		window_set_click_config_provider(me, image_click_config_provider);		
+		window_set_click_config_provider(me, image_click_config_provider);
 		break;
 	}
 }
@@ -223,9 +241,9 @@ void window_unload(Window *me) {
 		text_layer_destroy(messagetext_layer);
 		break;
 	case 3: // back to message
-		request_command(1092, selected_item_id);
+		request_command(1092, selected_item_id);		
 		bitmap_layer_destroy(image_layer);
-		scroll_layer_set_content_size(message_layer, GSize(0, 0));
+		layer_set_hidden(scroll_layer_get_layer(message_layer), true);		
 	}	
 	current_level--;
 }
@@ -249,12 +267,12 @@ void ack() {
 	request_command(1090, 1);
 }
 
-void set_messagetext_layer() {
+void show_messagetext_layer() {
 	text_layer_set_font(messagetext_layer, fonts_get_system_font(fontid2resource(fontmessage)));
 	GSize size = text_layer_get_content_size(messagetext_layer);
 	size.h += 4;
-	scroll_layer_set_content_size(message_layer, size);
 	scroll_layer_set_content_offset(message_layer, GPoint(0, 0), false);
+	scroll_layer_set_content_size(message_layer, size);
 	layer_mark_dirty(scroll_layer_get_layer(message_layer));
 	layer_set_hidden(scroll_layer_get_layer(message_layer), false);
 }
@@ -270,8 +288,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		if (feed_receive_idx == 0) {
 			feed_count = total->value->uint8;
 			menu_layer_reload_data(menu_layer[0]);
-			if (refresh_layer != NULL)
-				layer_set_hidden(bitmap_layer_get_layer(refresh_layer), true);
+			hide_loading();
 		}
 
 		layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));	
@@ -320,22 +337,12 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 			layer_mark_dirty(menu_layer_get_layer(menu_layer[1]));
 		}
 		if (current_level > 1)
-			set_messagetext_layer();
+			show_messagetext_layer();
 	}
 
 	Tuple *refresh_packet = dict_find(received, 1017);
-	if (refresh_packet && current_level == 0 && feed_receive_idx == 0) {
-		if (refresh_layer == NULL) {
-			Layer *window0 = window_get_root_layer(window[0]);
-			refresh_layer = bitmap_layer_create(layer_get_bounds(window0));
-			refresh_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_REFRESH);
-			bitmap_layer_set_alignment(refresh_layer, GAlignCenter);
-			bitmap_layer_set_background_color(refresh_layer, GColorClear);
-			bitmap_layer_set_bitmap(refresh_layer, refresh_bitmap);
-			layer_add_child(window0, bitmap_layer_get_layer(refresh_layer));
-		}
-		layer_set_hidden(bitmap_layer_get_layer(refresh_layer), false);
-	}
+	if (refresh_packet && current_level == 0 && feed_receive_idx == 0)
+		show_loading();
 	
 	Tuple *image_w_packet = dict_find(received, 1018);
 	if (image_w_packet) {
@@ -360,7 +367,8 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		Tuple *chunk_t_packet = dict_find(received, 9996);
 		
 		if (chunk_receive_idx == 0) {
-			memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);
+			show_loading();
+			memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);			
 			if (current_level == 3)
 				layer_set_hidden(bitmap_layer_get_layer(image_layer), false);
 		}
@@ -368,10 +376,11 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		memcpy(&chunk_buffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
 
 		if (++chunk_receive_idx == chunk_t_packet->value->uint8) {
-			throttle();
 			chunk_receive_idx = 0;
+			throttle();			
+			hide_loading();
 			if (current_level == 2)
-				set_messagetext_layer();
+				show_messagetext_layer();			
 		}
 		else ack();		
 		
