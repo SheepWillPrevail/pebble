@@ -130,8 +130,8 @@ void show_loading() {
 		bitmap_layer_set_alignment(refresh_layer, GAlignCenter);
 		bitmap_layer_set_background_color(refresh_layer, GColorClear);
 		bitmap_layer_set_bitmap(refresh_layer, refresh_bitmap);
-		layer_add_child(window_layer, bitmap_layer_get_layer(refresh_layer));
 	}
+	layer_add_child(window_layer, bitmap_layer_get_layer(refresh_layer));
 	layer_set_hidden(bitmap_layer_get_layer(refresh_layer), false);
 }
 
@@ -241,7 +241,7 @@ void window_unload(Window *me) {
 		text_layer_destroy(messagetext_layer);
 		break;
 	case 3: // back to message
-		request_command(1092, selected_item_id);		
+		request_command(1092, selected_item_id);
 		bitmap_layer_destroy(image_layer);
 		layer_set_hidden(scroll_layer_get_layer(message_layer), true);		
 	}	
@@ -291,7 +291,7 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 			hide_loading();
 		}
 
-		layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));	
+		layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));
 
 		if (current_level == 0) {
 			if (++feed_receive_idx == feed_count) // received all
@@ -366,11 +366,12 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 		Tuple *chunk_l_packet = dict_find(received, 9997);
 		Tuple *chunk_t_packet = dict_find(received, 9996);
 		
-		if (chunk_receive_idx == 0) {
-			show_loading();
+		if (chunk_receive_idx == 0) {			
 			memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);			
 			if (current_level == 3)
 				layer_set_hidden(bitmap_layer_get_layer(image_layer), false);
+			else
+				show_loading();
 		}
 
 		memcpy(&chunk_buffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
