@@ -107,10 +107,10 @@ void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *c
 	GRect bounds = layer_get_bounds(cell_layer);
 	switch (current_level) {
 	case 0:
-		graphics_draw_text(ctx, feed_names[cell_index->row], fonts_get_system_font(fontid2resource(fontfeed)), bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+		graphics_draw_text(ctx, feed_names[cell_index->row], fonts_get_system_font(fontid2resource(fontfeed)), bounds, GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 		break;
 	case 1:
-		graphics_draw_text(ctx, item_names[cell_index->row], fonts_get_system_font(fontid2resource(fontitem)), bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+		graphics_draw_text(ctx, item_names[cell_index->row], fonts_get_system_font(fontid2resource(fontitem)), bounds, GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 		break;	
 	}
 }
@@ -291,12 +291,13 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 			hide_loading();
 		}
 
-		layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));
-
 		if (current_level == 0) {
 			if (++feed_receive_idx == feed_count) // received all
 				throttle();
-			else request_command(1090, 2);
+			else {
+				request_command(1090, 2);
+				layer_mark_dirty(menu_layer_get_layer(menu_layer[0]));				
+			}
 		}
 	}  
 
@@ -312,12 +313,13 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 			menu_layer_reload_data(menu_layer[1]);
 		}
 
-		layer_mark_dirty(menu_layer_get_layer(menu_layer[1]));
-
 		if (current_level == 1) {
 			if (++item_receive_idx == item_count) // received all
 				throttle();
-			else request_command(1090, 3);
+			else {
+				request_command(1090, 3);
+				layer_mark_dirty(menu_layer_get_layer(menu_layer[1]));
+			}
 		}
 	}
 
