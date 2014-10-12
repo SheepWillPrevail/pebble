@@ -38,9 +38,8 @@ void request_command(int slot, int command) {
 		dict_write_uint8(dict, slot, command);
 		dict_write_end(dict);
 		result = app_message_outbox_send();
-		if (result == APP_MSG_OK) {
+		if (result == APP_MSG_OK)
 			app_comm_set_sniff_interval(SNIFF_INTERVAL_REDUCED);
-		}
 	}
 	else {
 		current_slot = slot;
@@ -58,31 +57,31 @@ void handle_resend(void* data) {
 char* fontid2resource(int id) {
 	switch (id) {
 		case 0:
-		return FONT_KEY_GOTHIC_14;
+			return FONT_KEY_GOTHIC_14;
 		case 1:
-		return FONT_KEY_GOTHIC_14_BOLD;
+			return FONT_KEY_GOTHIC_14_BOLD;
 		case 2:
-		return FONT_KEY_GOTHIC_18;
+			return FONT_KEY_GOTHIC_18;
 		case 3:
-		return FONT_KEY_GOTHIC_18_BOLD;
+			return FONT_KEY_GOTHIC_18_BOLD;
 		case 4:
-		return FONT_KEY_GOTHIC_24;
+			return FONT_KEY_GOTHIC_24;
 		case 5:
-		return FONT_KEY_GOTHIC_24_BOLD;
+			return FONT_KEY_GOTHIC_24_BOLD;
 		case 6:
-		return FONT_KEY_GOTHIC_28;
+			return FONT_KEY_GOTHIC_28;
 		case 7:
-		return FONT_KEY_GOTHIC_28_BOLD;
+			return FONT_KEY_GOTHIC_28_BOLD;
 		case 8:
-		return FONT_KEY_BITHAM_30_BLACK;
+			return FONT_KEY_BITHAM_30_BLACK;
 		case 9:
-		return FONT_KEY_BITHAM_42_BOLD;
+			return FONT_KEY_BITHAM_42_BOLD;
 		case 10:
-		return FONT_KEY_BITHAM_42_LIGHT;
+			return FONT_KEY_BITHAM_42_LIGHT;
 		case 11:
-		return FONT_KEY_ROBOTO_CONDENSED_21;
+			return FONT_KEY_ROBOTO_CONDENSED_21;
 		case 12:
-		return FONT_KEY_DROID_SERIF_28_BOLD;
+			return FONT_KEY_DROID_SERIF_28_BOLD;
 	}
 	return 0;
 }
@@ -90,11 +89,11 @@ char* fontid2resource(int id) {
 uint16_t menu_get_num_rows_callback(MenuLayer *me, uint16_t section_index, void *data) {
 	switch (current_level) {
 		case 0:
-		return feed_count;
+			return feed_count;
 		case 1:
-		return item_count;
+			return item_count;
 		default:
-		return 0;
+			return 0;
 	}
 }
 
@@ -107,23 +106,23 @@ void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *c
 	GRect bounds = layer_get_bounds(cell_layer);
 	switch (current_level) {
 		case 0:
-		graphics_draw_text(ctx,
-			feed_names[cell_index->row],
-			fonts_get_system_font(fontid2resource(fontfeed)),
-			bounds,
-			GTextOverflowModeTrailingEllipsis,
-			GTextAlignmentLeft,
-			NULL);
-		break;
+			graphics_draw_text(ctx,
+				feed_names[cell_index->row],
+				fonts_get_system_font(fontid2resource(fontfeed)),
+				bounds,
+				GTextOverflowModeTrailingEllipsis,
+				GTextAlignmentLeft,
+				NULL);
+			break;
 		case 1:
-		graphics_draw_text(ctx,
-			item_names[cell_index->row],
-			fonts_get_system_font(fontid2resource(fontitem)),
-			bounds,
-			GTextOverflowModeTrailingEllipsis,
-			GTextAlignmentLeft,
-			NULL);
-		break;
+			graphics_draw_text(ctx,
+				item_names[cell_index->row],
+				fonts_get_system_font(fontid2resource(fontitem)),
+				bounds,
+				GTextOverflowModeTrailingEllipsis,
+				GTextAlignmentLeft,
+				NULL);
+			break;
 	}
 }
 
@@ -184,13 +183,13 @@ void menu_select_callback(MenuLayer *me, MenuIndex *cell_index, void *data) {
 	push_new_level();
 	switch (current_level) {
 		case 1:
-		item_receive_idx = 0; item_count = 0;
-		request_command(1091, cell_index->row);
-		break;
+			item_receive_idx = 0; item_count = 0;
+			request_command(1091, cell_index->row);
+			break;
 		case 2:
-		selected_item_id = cell_index->row;
-		request_command(1092, selected_item_id);
-		break;
+			selected_item_id = cell_index->row;
+			request_command(1092, selected_item_id);
+			break;
 	}
 }
 
@@ -240,7 +239,7 @@ void window_load(Window *me) {
 			layer_set_hidden(menu_layer_get_layer(menu_layer[current_level]), true);
 			layer_add_child(window_layer, menu_layer_get_layer(menu_layer[current_level]));
 			break;
-			case 2:
+		case 2:
 			messageheader_layer = text_layer_create(GRect(0, 0, 144, INT16_MAX));
 			messageseparator_layer = inverter_layer_create(GRect(0, 0, 144, INT16_MAX));
 			messagetext_layer = text_layer_create(GRect(0, 0, 144, INT16_MAX));
@@ -255,7 +254,7 @@ void window_load(Window *me) {
 			layer_set_hidden(scroll_layer_get_layer(message_layer), true);
 			layer_add_child(window_layer, scroll_layer_get_layer(message_layer));
 			break;
-			case 3:
+		case 3:
 			image_layer = bitmap_layer_create(layer_get_bounds(window_layer));
 			bitmap_layer_set_alignment(image_layer, GAlignCenter);
 			bitmap_layer_set_background_color(image_layer, GColorClear);
@@ -267,25 +266,26 @@ void window_load(Window *me) {
 		}
 	}
 
-	void window_unload(Window *me) {
-		switch (current_level) {
-	case 1: // back to feed list
-	menu_layer_destroy(menu_layer[1]);
-		if (feed_receive_idx != feed_count) request_command(1090, 2); // continue loading
-		break;
-	case 2: // back to item list
-	scroll_layer_destroy(message_layer);
-	text_layer_destroy(messageheader_layer);
-	inverter_layer_destroy(messageseparator_layer);
-	text_layer_destroy(messagetext_layer);
-		if (item_receive_idx != item_count) request_command(1090, 3); // continue loading
-		break;
-	case 3: // back to message
-	bitmap_layer_destroy(image_layer);
-	layer_set_hidden(scroll_layer_get_layer(message_layer), true);
-	request_command(1092, selected_item_id);
-}
-current_level--;
+void window_unload(Window *me) {
+	switch (current_level) {
+		case 1: // back to feed list
+			menu_layer_destroy(menu_layer[1]);
+			if (feed_receive_idx != feed_count) request_command(1090, 2); // continue loading
+			break;
+		case 2: // back to item list
+			scroll_layer_destroy(message_layer);
+			text_layer_destroy(messageheader_layer);
+			inverter_layer_destroy(messageseparator_layer);
+			text_layer_destroy(messagetext_layer);
+			if (item_receive_idx != item_count) request_command(1090, 3); // continue loading
+			break;
+		case 3: // back to message
+			bitmap_layer_destroy(image_layer);
+			layer_set_hidden(scroll_layer_get_layer(message_layer), true);
+			request_command(1092, selected_item_id);
+			break;
+	}
+	current_level--;
 }
 
 Window* create_window() {
@@ -397,9 +397,8 @@ void msg_in_rcv_handler(DictionaryIterator *received, void *context) {
 			memset(chunk_buffer, 0, CHUNK_BUFFER_SIZE);
 			if (current_level == 2 && layer_get_hidden(scroll_layer_get_layer(message_layer)))
 				show_loading();
-			if (current_level == 3) {
+			if (current_level == 3)
 				layer_set_hidden(bitmap_layer_get_layer(image_layer), false);
-			}
 		}
 		memcpy(&chunk_buffer[chunk_o_packet->value->uint16], chunk_d_packet->value->data, chunk_l_packet->value->uint8);
 		if (++chunk_receive_idx == chunk_t_packet->value->uint8) {
